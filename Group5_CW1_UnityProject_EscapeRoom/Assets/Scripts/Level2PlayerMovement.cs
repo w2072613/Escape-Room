@@ -1,24 +1,31 @@
-
 using UnityEngine;
 
 public class Level2PlayerMovement : MonoBehaviour
 {
     public float moveSpeed = 5f;
-    public float mouseSensitivity = 2f;
     public float gravity = -9.81f;
 
     private CharacterController controller;
-    private Camera playerCamera;
     private float verticalVelocity;
-    private float cameraRotation;
 
     void Start()
     {
         controller = GetComponent<CharacterController>();
-        playerCamera = GetComponentInChildren<Camera>();
+        Camera playerCamera = GetComponentInChildren<Camera>();
+        playerCamera.transform.SetParent(null);
+        playerCamera.transform.SetPositionAndRotation(new Vector3(0, 8, -.5f), Quaternion.Euler(90, 0, 0));
+        playerCamera.orthographic = true;
+        playerCamera.orthographicSize = Mathf.Max(7.5f, 5.5f / playerCamera.aspect);
 
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+        var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        marker.name = "Player marker";
+        marker.GetComponent<Collider>().enabled = false;
+        marker.GetComponent<Renderer>().material.color = Color.cyan;
+        marker.transform.SetParent(transform, false);
+        marker.transform.localScale = new Vector3(.45f, .25f, .45f);
+
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
     }
 
     void Update()
@@ -26,9 +33,7 @@ public class Level2PlayerMovement : MonoBehaviour
         float horizontal = Input.GetAxis("Horizontal");
         float vertical = Input.GetAxis("Vertical");
 
-        Vector3 movement =
-            transform.right * horizontal +
-            transform.forward * vertical;
+        Vector3 movement = new Vector3(horizontal, 0, vertical);
 
         if (movement.magnitude > 1f)
             movement.Normalize();
@@ -41,21 +46,5 @@ public class Level2PlayerMovement : MonoBehaviour
 
         controller.Move(movement * moveSpeed * Time.deltaTime);
 
-        float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
-        float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
-
-        transform.Rotate(Vector3.up * mouseX);
-
-        cameraRotation -= mouseY;
-        cameraRotation = Mathf.Clamp(cameraRotation, -80f, 80f);
-
-        playerCamera.transform.localRotation =
-            Quaternion.Euler(cameraRotation, 0f, 0f);
-
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-        }
     }
 }
