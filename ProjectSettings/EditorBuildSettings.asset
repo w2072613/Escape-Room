@@ -8,4 +8,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/EscapeRoom.unity
     guid: 424a673295a04c40abf3191e7fdcd082
+  - enabled: 1
+    path: Assets/Scenes/Level2_PowerRoom.unity
+    guid: 53253fe63c3fc41d68fa9d7f4588987a
   m_configObjects: {}
