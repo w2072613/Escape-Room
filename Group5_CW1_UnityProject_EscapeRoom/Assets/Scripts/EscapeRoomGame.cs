@@ -1,4 +1,6 @@
+// Fixed overhead camera and matching movement controls.
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public sealed class EscapeRoomGame : MonoBehaviour
 {
@@ -15,14 +17,18 @@ public sealed class EscapeRoomGame : MonoBehaviour
     string prompt;
     readonly Vector3 spawn = new Vector3(0, .05f, -3);
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-static void StartGame()
-{
-    if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != "EscapeRoom") return;
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    static void RegisterScenes()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
 
-    if (Object.FindFirstObjectByType<EscapeRoomGame>() == null)
-        new GameObject("Escape Room Game").AddComponent<EscapeRoomGame>();
-}
+    static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (scene.name == "EscapeRoom" && Object.FindFirstObjectByType<EscapeRoomGame>() == null)
+            new GameObject("Escape Room Game").AddComponent<EscapeRoomGame>();
+    }
 
     void Awake()
     {
@@ -48,6 +54,7 @@ static void StartGame()
         eyes.nearClipPlane = .05f;
         eyes.backgroundColor = new Color(.07f, .08f, .1f);
         eyes.clearFlags = CameraClearFlags.SolidColor;
+        LegoTutorials.CreateWorkshop(eyes);
         ShowCursor();
     }
 
@@ -104,6 +111,7 @@ static void StartGame()
 
     void Update()
     {
+        if (LegoTutorials.WorkshopActive) return;
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             if (keypadOpen) keypadOpen = false;
@@ -196,6 +204,12 @@ static void StartGame()
 
     void SubmitCode()
     {
+        if (LegoTutorials.Workshop == null || !LegoTutorials.Workshop.PowerRestored)
+        {
+            keypadOpen = false;
+            Say("The keypad has no power. Solve the LEGO power workshop first.", 8);
+            return;
+        }
         if (code == "2148")
         {
             unlocked = true;
@@ -208,25 +222,16 @@ static void StartGame()
 
     void Restart()
     {
-        hasKey = drawerOpen = rugMoved = unlocked = escaped = keypadOpen = paused = false;
-        code = "";
-        rug.transform.position = new Vector3(-1.8f, .025f, -.8f);
-        rugMaterial.color = new Color(.55f, .09f, .12f);
-        keyObject.SetActive(false);
-        drawerObject.transform.position = new Vector3(-2.7f, .82f, 2.65f);
-        note.SetActive(false);
-        doorAngle = 0;
-        doorHinge.localRotation = Quaternion.identity;
-        player.enabled = false;
-        player.transform.SetPositionAndRotation(spawn, Quaternion.identity);
-        player.enabled = true;
-        verticalSpeed = 0;
-        Say("Search the room. Something might be hidden under the rug.", 8);
-        ShowCursor();
+        SceneManager.LoadScene("EscapeRoom");
     }
 
     void OnGUI()
     {
+        if (LegoTutorials.WorkshopActive) return;
+        if (!escaped && !paused && !keypadOpen && LegoTutorials.Workshop != null &&
+            GUI.Button(new Rect(Screen.width - 220, 45, 205, 32), "LEGO power workshop"))
+            LegoTutorials.Workshop.ShowWorkshop(true);
+        GUI.Label(new Rect(18, 72, 600, 25), "Objective: restore power, find the exit code, and escape.");
         GUI.Label(new Rect(18, 15, 600, 25), "ESCAPE ROOM   |   WASD: move   Hover nearby objects and click or press E   Esc: pause");
         GUI.Label(new Rect(18, 42, 500, 25), hasKey ? "Inventory: brass key" : "Inventory: empty");
         if (Time.time < messageUntil) GUI.Box(new Rect(20, Screen.height - 85, Screen.width - 40, 55), message);
@@ -271,7 +276,11 @@ static void StartGame()
         {
             GUILayout.BeginArea(new Rect((Screen.width - 320) / 2f, (Screen.height - 180) / 2f, 320, 180), GUI.skin.box);
             GUILayout.Label(escaped ? "YOU ESCAPED!" : "PAUSED");
-            if (escaped) GUILayout.Label("You unlocked the exit and left the room.");
+            if (escaped)
+            {
+                GUILayout.Label("Room 1 escaped — the Power Room is next.");
+                if (GUILayout.Button("Continue to Power Room")) SceneManager.LoadScene("Level2_PowerRoom");
+            }
             else if (GUILayout.Button("Resume")) { paused = false; ShowCursor(); }
             if (GUILayout.Button("Restart room")) Restart();
             GUILayout.EndArea();
