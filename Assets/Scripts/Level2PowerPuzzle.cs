@@ -1,5 +1,6 @@
 
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class Level2PowerPuzzle : MonoBehaviour
 {
@@ -17,6 +18,7 @@ public class Level2PowerPuzzle : MonoBehaviour
     private int[] correctOrder = { 2, 1, 3 };
     private int currentStep = 0;
     private bool puzzleSolved = false;
+    private bool levelCompleted = false;
 
     private bool[] activated = new bool[3];
     private Renderer[] switchRenderers = new Renderer[3];
@@ -40,8 +42,22 @@ public class Level2PowerPuzzle : MonoBehaviour
 
     void Update()
     {
-        if (puzzleSolved || player == null)
+        if (player == null || levelCompleted)
             return;
+
+        // Show completion screen after crossing the unlocked exit.
+        if (puzzleSolved)
+        {
+            if (player.position.z < -6f &&
+                Mathf.Abs(player.position.x) < 1.2f)
+            {
+                levelCompleted = true;
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
+
+            return;
+        }
 
         if (Input.GetKeyDown(KeyCode.E))
         {
@@ -122,7 +138,7 @@ public class Level2PowerPuzzle : MonoBehaviour
                     }
                 }
 
-                Debug.Log("Level 2 completed!");
+                Debug.Log("Level 2 puzzle solved!");
             }
         }
         else
@@ -149,7 +165,51 @@ public class Level2PowerPuzzle : MonoBehaviour
 
     void OnGUI()
     {
-        GUI.Box(new Rect(15, 15, 450, 85), "LEVEL 2 - POWER RESTORATION");
+        if (levelCompleted)
+        {
+            // Full-screen background hides the outside of the room.
+            GUI.Box(
+                new Rect(0, 0, Screen.width, Screen.height),
+                ""
+            );
+
+            float boxWidth = 420f;
+            float boxHeight = 230f;
+            float x = (Screen.width - boxWidth) / 2f;
+            float y = (Screen.height - boxHeight) / 2f;
+
+            GUI.Box(
+                new Rect(x, y, boxWidth, boxHeight),
+                "LEVEL 2 COMPLETE!"
+            );
+
+            GUI.Label(
+                new Rect(x + 35, y + 65, 360, 30),
+                "Power successfully restored!"
+            );
+
+            GUI.Label(
+                new Rect(x + 35, y + 105, 360, 30),
+                "You escaped the Power Restoration Room."
+            );
+
+            if (GUI.Button(
+                new Rect(x + 35, y + 155, 350, 40),
+                "Restart Level"
+            ))
+            {
+                SceneManager.LoadScene(
+                    SceneManager.GetActiveScene().name
+                );
+            }
+
+            return;
+        }
+
+        GUI.Box(
+            new Rect(15, 15, 450, 85),
+            "LEVEL 2 - POWER RESTORATION"
+        );
 
         GUI.Label(new Rect(30, 45, 420, 25), message);
 
