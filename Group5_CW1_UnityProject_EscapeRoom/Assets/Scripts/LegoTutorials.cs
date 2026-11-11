@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.EventSystems;
@@ -6,7 +7,8 @@ using UnityEngine.Playables;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-// AI-assisted implementation using the course Tutorials 02–03 and 05.2 as references.
+// Tutorial references: 02–03 (brick controls) and 05.2 (animation buttons).
+// Yaseen controls the Rigidbody brick; Zain controls the draggable brick.
 public sealed class LegoTutorials : MonoBehaviour
 {
     private Rigidbody physicsBrick;
@@ -16,6 +18,38 @@ public sealed class LegoTutorials : MonoBehaviour
     private bool dragging;
     private PlayableGraph animationGraph;
     private Vector3 movement;
+    private readonly List<AnimationClipPlayable> motions = new List<AnimationClipPlayable>();
+    private float clipLength;
+    private Camera roomCamera;
+    private bool inEscapeRoom;
+    private bool active = true;
+    public static LegoTutorials Workshop { get; private set; }
+    public static bool WorkshopActive => Workshop != null && Workshop.active;
+    public bool PowerRestored { get; private set; }
+
+    public static void CreateWorkshop(Camera camera)
+    {
+        var demo = new GameObject("LEGO power workshop").AddComponent<LegoTutorials>();
+        demo.inEscapeRoom = true;
+        demo.roomCamera = camera;
+        Workshop = demo;
+    }
+
+    public void ShowWorkshop(bool show)
+    {
+        active = show;
+        dragging = false;
+        movement = Vector3.zero;
+        physicsBrick.linearVelocity = Vector3.zero;
+        foreach (Transform child in transform) child.gameObject.SetActive(show);
+        if (roomCamera != null) roomCamera.enabled = !show;
+    }
+
+    private GameObject Own(GameObject obj)
+    {
+        obj.transform.SetParent(transform, true);
+        return obj;
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Initialize()
@@ -28,13 +62,13 @@ public sealed class LegoTutorials : MonoBehaviour
     {
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
-        overhead = new GameObject("Overhead Camera").AddComponent<Camera>();
-        overhead.transform.SetPositionAndRotation(new Vector3(0, 10, 0), Quaternion.Euler(90, 0, 0));
+        overhead = Own(new GameObject("Workshop Camera")).AddComponent<Camera>();
+        overhead.transform.SetPositionAndRotation(new Vector3(0, 12, -10), Quaternion.LookRotation(new Vector3(0, -12, 10)));
         overhead.orthographic = true;
-        overhead.orthographicSize = Mathf.Max(5, 8 / overhead.aspect);
+        overhead.orthographicSize = Mathf.Max(6, 9 / overhead.aspect);
 
         RenderSettings.ambientLight = Color.white * .7f;
-        var light = new GameObject("Directional Light").AddComponent<Light>();
+        var light = Own(new GameObject("Workshop Light")).AddComponent<Light>();
         light.type = LightType.Directional;
         light.transform.rotation = Quaternion.Euler(50, -30, 0);
         Box("Floor", new Vector3(0, -.15f, 0), new Vector3(16, .3f, 10), Color.gray);
@@ -44,12 +78,13 @@ public sealed class LegoTutorials : MonoBehaviour
         physicsBrick.linearDamping = 4;
         mouseBrick = Brick("Zain - mouse brick", new Vector3(4, .45f, 0), Color.blue).transform;
 
-        var canvas = new GameObject("Demo Controls", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster)).GetComponent<Canvas>();
+        var canvas = Own(new GameObject("Demo Controls", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster))).GetComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         var scaler = canvas.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(960, 540);
-        new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+        if (Object.FindFirstObjectByType<EventSystem>() == null)
+            Own(new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule)));
         animationGraph = PlayableGraph.Create("LEGO animation controls");
 
         var model = Resources.Load<GameObject>("LegoWalk");
@@ -60,19 +95,44 @@ public sealed class LegoTutorials : MonoBehaviour
             return;
         }
 
+        clipLength = clip.length;
         AddFigure(model, clip, "Yaseen", -4, canvas.transform, 25);
         AddFigure(model, clip, "Zain", 4, canvas.transform, 545);
         animationGraph.Play();
+        Box("Red power pad", new Vector3(-4, .02f, -2), new Vector3(2, .04f, 1.4f), new Color(.5f, .12f, .12f));
+        Box("Blue power pad", new Vector3(4, .02f, -2), new Vector3(2, .04f, 1.4f), new Color(.12f, .2f, .5f));
+        // Physical boundaries keep the Rigidbody on its half of the workbench.
+        Box("Left boundary", new Vector3(-7.8f, .5f, 0), new Vector3(.2f, 1, 10), Color.gray);
+        Box("Divider", new Vector3(0, .5f, 0), new Vector3(.2f, 1, 10), Color.gray);
+        Box("Front boundary", new Vector3(-4, .5f, -4.8f), new Vector3(8, 1, .2f), Color.gray);
+        Box("Back boundary", new Vector3(-4, .5f, 4.8f), new Vector3(8, 1, .2f), Color.gray);
+        if (inEscapeRoom)
+        {
+            transform.position = Vector3.right * 24;
+            ShowWorkshop(false);
+        }
     }
 
     private void AddFigure(GameObject model, AnimationClip clip, string student, float x, Transform canvas, float left)
     {
-        var figure = Instantiate(model, new Vector3(x, 0, 3), Quaternion.identity);
-        figure.name = student + " - minifigure";
-        var animator = figure.GetComponent<Animator>() ?? figure.AddComponent<Animator>();
+        var anchor = Own(new GameObject(student + " - minifigure"));
+        anchor.transform.SetPositionAndRotation(new Vector3(x, 0, 2.5f), Quaternion.Euler(0, 180, 0));
+        var figure = Instantiate(model, anchor.transform, false);
+        var renderers = figure.GetComponentsInChildren<Renderer>();
+        if (renderers.Length > 0)
+        {
+            var bounds = renderers[0].bounds;
+            foreach (var renderer in renderers) bounds.Encapsulate(renderer.bounds);
+            if (bounds.size.y > .001f) anchor.transform.localScale *= 1.8f / bounds.size.y;
+        }
+        figure.name = "Animated LEGO model";
+        var animator = figure.GetComponent<Animator>();
+        // Unity components use a custom null check; ?? can retain a missing component.
+        if (animator == null) animator = figure.AddComponent<Animator>();
         animator.applyRootMotion = false;
         var motion = AnimationClipPlayable.Create(animationGraph, clip);
         motion.SetSpeed(0);
+        motions.Add(motion);
         var output = AnimationPlayableOutput.Create(animationGraph, student, animator);
         output.SetSourcePlayable(motion);
         AddButton(canvas, student + " Stand", left, () =>
@@ -111,32 +171,55 @@ public sealed class LegoTutorials : MonoBehaviour
 
     private void Update()
     {
+        if (!active) return;
+        foreach (var motion in motions)
+            if (clipLength > 0 && motion.GetTime() >= clipLength)
+                motion.SetTime(motion.GetTime() % clipLength);
+        var red = physicsBrick.transform.localPosition;
+        var blue = mouseBrick.localPosition;
+        if (Vector2.Distance(new Vector2(red.x, red.z), new Vector2(-4, -2)) < .55f &&
+            Vector2.Distance(new Vector2(blue.x, blue.z), new Vector2(4, -2)) < .55f)
+            PowerRestored = true;
         movement = Vector3.ClampMagnitude(new Vector3(Input.GetAxisRaw("Horizontal"), 0, Input.GetAxisRaw("Vertical")), 1);
-        var ray = overhead.ScreenPointToRay(Input.mousePosition);
+        HandlePointer(Input.GetMouseButtonDown(0), Input.GetMouseButton(0), Input.mousePosition,
+            EventSystem.current != null && EventSystem.current.IsPointerOverGameObject());
+    }
+
+    private void HandlePointer(bool pressed, bool held, Vector3 screenPosition, bool overUI)
+    {
+        var ray = overhead.ScreenPointToRay(screenPosition);
         var plane = new Plane(Vector3.up, mouseBrick.position);
-        if (Input.GetMouseButtonDown(0) && !EventSystem.current.IsPointerOverGameObject() &&
-            Physics.Raycast(ray, out var hit) && hit.transform == mouseBrick && plane.Raycast(ray, out var start))
+        if (pressed && !overUI && Physics.Raycast(ray, out var hit) &&
+            hit.transform == mouseBrick && plane.Raycast(ray, out var start))
         {
             dragging = true;
             dragOffset = mouseBrick.position - ray.GetPoint(start);
         }
-
-        if (!Input.GetMouseButton(0)) dragging = false;
+        if (!held) dragging = false;
         if (dragging && plane.Raycast(ray, out var distance))
         {
             var position = ray.GetPoint(distance) + dragOffset;
-            mouseBrick.position = new Vector3(Mathf.Clamp(position.x, .9f, 7), mouseBrick.position.y, Mathf.Clamp(position.z, -4, 2));
+            mouseBrick.position = new Vector3(
+                Mathf.Clamp(position.x, transform.position.x + .9f, transform.position.x + 7),
+                mouseBrick.position.y,
+                Mathf.Clamp(position.z, transform.position.z - 4, transform.position.z + 2));
         }
     }
 
     private void FixedUpdate()
     {
-        if (physicsBrick != null)
+        if (active && physicsBrick != null)
             physicsBrick.AddForce(movement * 18, ForceMode.Acceleration);
     }
 
     private void OnGUI()
     {
+        if (!active) return;
+        GUI.Box(new Rect(15, 8, Screen.width - 30, 25), PowerRestored
+            ? "WORKSHOP POWER RESTORED — the escape-room keypad now has power."
+            : "LEGO POWER WORKSHOP — move each brick onto its matching dark pad.");
+        if (inEscapeRoom && GUI.Button(new Rect(Screen.width / 2f - 110, Screen.height - 48, 220, 32), "Return to escape room"))
+            ShowWorkshop(false);
         GUI.Box(new Rect(15, Screen.height - 60, 270, 38), "Yaseen: WASD moves the red brick");
         GUI.Box(new Rect(Screen.width - 285, Screen.height - 60, 270, 38), "Zain: click and drag the blue brick");
     }
@@ -144,9 +227,10 @@ public sealed class LegoTutorials : MonoBehaviour
     private void OnDestroy()
     {
         if (animationGraph.IsValid()) animationGraph.Destroy();
+        if (Workshop == this) Workshop = null;
     }
 
-    private static GameObject Brick(string label, Vector3 position, Color color)
+    private GameObject Brick(string label, Vector3 position, Color color)
     {
         var body = Box(label, position, new Vector3(1.5f, .65f, .8f), color);
         for (int row = 0; row < 2; row++)
@@ -163,9 +247,9 @@ public sealed class LegoTutorials : MonoBehaviour
         return body;
     }
 
-    private static GameObject Box(string label, Vector3 position, Vector3 size, Color color)
+    private GameObject Box(string label, Vector3 position, Vector3 size, Color color)
     {
-        var box = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        var box = Own(GameObject.CreatePrimitive(PrimitiveType.Cube));
         box.name = label;
         box.transform.position = position;
         box.transform.localScale = size;

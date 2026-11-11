@@ -20,6 +20,8 @@ public class Level2PowerPuzzle : MonoBehaviour
     private bool puzzleSolved = false;
     private bool levelCompleted = false;
 
+    public bool LevelCompleted => levelCompleted;
+
     private bool[] activated = new bool[3];
     private Renderer[] switchRenderers = new Renderer[3];
 
@@ -174,7 +176,7 @@ public class Level2PowerPuzzle : MonoBehaviour
             );
 
             float boxWidth = 420f;
-            float boxHeight = 230f;
+            float boxHeight = 280f;
             float x = (Screen.width - boxWidth) / 2f;
             float y = (Screen.height - boxHeight) / 2f;
 
@@ -203,6 +205,8 @@ public class Level2PowerPuzzle : MonoBehaviour
                 );
             }
 
+            if (GUI.Button(new Rect(x + 35, y + 205, 350, 40), "Restart full escape room"))
+                SceneManager.LoadScene("EscapeRoom");
             return;
         }
 

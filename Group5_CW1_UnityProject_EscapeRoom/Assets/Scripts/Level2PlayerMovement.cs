@@ -1,4 +1,4 @@
-// AI-assisted change: fixed overhead camera and matching input for the Escape Room.
+// Fixed overhead camera and matching movement controls.
 using UnityEngine;
 
 public class Level2PlayerMovement : MonoBehaviour
@@ -8,10 +8,12 @@ public class Level2PlayerMovement : MonoBehaviour
 
     private CharacterController controller;
     private float verticalVelocity;
+    private Level2PowerPuzzle puzzle;
 
     void Start()
     {
         controller = GetComponent<CharacterController>();
+        puzzle = Object.FindFirstObjectByType<Level2PowerPuzzle>();
         Camera playerCamera = GetComponentInChildren<Camera>();
         playerCamera.transform.SetParent(null);
         playerCamera.transform.SetPositionAndRotation(new Vector3(0, 8, -.5f), Quaternion.Euler(90, 0, 0));
@@ -31,6 +33,7 @@ public class Level2PlayerMovement : MonoBehaviour
 
     void Update()
     {
+        if (puzzle != null && puzzle.LevelCompleted) return;
         float horizontal = Input.GetAxis("Horizontal");
         float vertical = Input.GetAxis("Vertical");
 
