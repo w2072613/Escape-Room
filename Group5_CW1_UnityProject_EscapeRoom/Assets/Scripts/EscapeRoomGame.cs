@@ -1,3 +1,4 @@
+// AI-assisted change: fixed overhead camera and matching input for the Escape Room.
 using UnityEngine;
 
 public sealed class EscapeRoomGame : MonoBehaviour
@@ -8,7 +9,7 @@ public sealed class EscapeRoomGame : MonoBehaviour
     GameObject rug, keyObject, drawerObject, note, keypad, door;
     Material rugMaterial;
     bool rugMoved, hasKey, drawerOpen, unlocked, escaped, keypadOpen, paused;
-    float pitch, verticalSpeed, doorAngle;
+    float verticalSpeed, doorAngle;
     string code = "", message = "Search the room. Something might be hidden under the rug.";
     float messageUntil = 8;
     GameObject target;
@@ -34,14 +35,21 @@ static void StartGame()
         player.radius = .3f;
         player.center = new Vector3(0, .9f, 0);
         player.stepOffset = .25f;
-        eyes = new GameObject("Player Camera").AddComponent<Camera>();
-        eyes.transform.SetParent(body.transform, false);
-        eyes.transform.localPosition = new Vector3(0, 1.6f, 0);
+        var marker = Box("Player marker", Vector3.zero, new Vector3(.45f, .25f, .45f), Color.cyan);
+        marker.GetComponent<Collider>().enabled = false;
+        marker.layer = 2; // Ignore Raycast
+        marker.transform.SetParent(body.transform, false);
+        marker.transform.localPosition = Vector3.up * .3f;
+        body.layer = 2;
+
+        eyes = new GameObject("Overhead Camera").AddComponent<Camera>();
+        eyes.transform.SetPositionAndRotation(new Vector3(0, 8, 1), Quaternion.Euler(90, 0, 0));
+        eyes.orthographic = true;
+        eyes.orthographicSize = Mathf.Max(6.5f, 4.4f / eyes.aspect);
         eyes.nearClipPlane = .05f;
-        eyes.fieldOfView = 75;
         eyes.backgroundColor = new Color(.07f, .08f, .1f);
         eyes.clearFlags = CameraClearFlags.SolidColor;
-        SetCursor(true);
+        ShowCursor();
     }
 
     void BuildRoom()
@@ -58,10 +66,10 @@ static void StartGame()
         Box("Left wall", new Vector3(-4, 1.7f, 0), new Vector3(.2f, 3.4f, 10), wallColor);
         Box("Right wall", new Vector3(4, 1.7f, 0), new Vector3(.2f, 3.4f, 10), wallColor);
         Box("Rear wall", new Vector3(0, 1.7f, -5), new Vector3(8, 3.4f, .2f), wallColor);
-        Box("Ceiling", new Vector3(0, 3.5f, 0), new Vector3(8, .2f, 10), wallColor);
+        Box("Ceiling", new Vector3(0, 3.5f, 0), new Vector3(8, .2f, 10), wallColor).SetActive(false);
         Box("Exit wall left", new Vector3(-2.5f, 1.7f, 5), new Vector3(3, 3.4f, .2f), wallColor);
         Box("Exit wall right", new Vector3(2.5f, 1.7f, 5), new Vector3(3, 3.4f, .2f), wallColor);
-        Box("Door lintel", new Vector3(0, 3.1f, 5), new Vector3(2, .6f, .2f), wallColor);
+        Box("Door lintel", new Vector3(0, 3.1f, 5), new Vector3(2, .6f, .2f), wallColor).SetActive(false);
         Box("Corridor left", new Vector3(-1.1f, 1.5f, 6), new Vector3(.2f, 3, 2), wallColor);
         Box("Corridor right", new Vector3(1.1f, 1.5f, 6), new Vector3(.2f, 3, 2), wallColor);
         Box("Corridor end", new Vector3(0, 1.5f, 7), new Vector3(2, 3, .2f), wallColor);
@@ -101,27 +109,23 @@ static void StartGame()
         {
             if (keypadOpen) keypadOpen = false;
             else paused = !paused;
-            SetCursor(!paused && !escaped && !keypadOpen);
+            ShowCursor();
         }
         doorAngle = Mathf.MoveTowards(doorAngle, unlocked ? -100 : 0, Time.deltaTime * 85);
         doorHinge.localRotation = Quaternion.Euler(0, doorAngle, 0);
         if (escaped || paused || keypadOpen) { target = null; prompt = ""; return; }
-        if (Cursor.lockState != CursorLockMode.Locked) return;
-        player.transform.Rotate(0, Input.GetAxis("Mouse X") * 2, 0);
-        pitch = Mathf.Clamp(pitch - Input.GetAxis("Mouse Y") * 2, -85, 85);
-        eyes.transform.localRotation = Quaternion.Euler(pitch, 0, 0);
         float x = (Input.GetKey(KeyCode.D) ? 1 : 0) - (Input.GetKey(KeyCode.A) ? 1 : 0);
         float z = (Input.GetKey(KeyCode.W) ? 1 : 0) - (Input.GetKey(KeyCode.S) ? 1 : 0);
-        var move = Vector3.ClampMagnitude(player.transform.right * x + player.transform.forward * z, 1) * 2.7f;
+        var move = Vector3.ClampMagnitude(new Vector3(x, 0, z), 1) * 2.7f;
         if (player.isGrounded && verticalSpeed < 0) verticalSpeed = -2;
         verticalSpeed += Physics.gravity.y * Time.deltaTime;
         player.Move((move + Vector3.up * verticalSpeed) * Time.deltaTime);
         FindTarget();
-        if (Input.GetKeyDown(KeyCode.E) && target != null) Interact(target);
+        if ((Input.GetKeyDown(KeyCode.E) || Input.GetMouseButtonDown(0)) && target != null) Interact(target);
         if (unlocked && player.transform.position.z > 6.25f)
         {
             escaped = true;
-            SetCursor(false);
+            ShowCursor();
         }
     }
 
@@ -129,8 +133,13 @@ static void StartGame()
     {
         target = null;
         prompt = "";
-        if (!Physics.Raycast(eyes.ViewportPointToRay(new Vector3(.5f, .5f)), out var hit, 2.5f)) return;
+        if (!Physics.Raycast(eyes.ScreenPointToRay(Input.mousePosition), out var hit)) return;
+        Vector3 distance = hit.point - player.transform.position;
+        distance.y = 0;
+        if (distance.sqrMagnitude > 2.5f * 2.5f) return;
+
         var obj = hit.collider.gameObject;
+        if (obj.name == "Desk top") obj = drawerObject;
         if (obj == rug) prompt = rugMoved ? "The rug has been moved" : "E — Lift the rug";
         else if (obj == keyObject) prompt = "E — Pick up the brass key";
         else if (obj == drawerObject) prompt = drawerOpen ? "E — Read the drawer note" : "E — Open the locked drawer";
@@ -170,21 +179,21 @@ static void StartGame()
         {
             keypadOpen = true;
             code = "";
-            SetCursor(false);
+            ShowCursor();
         }
     }
 
     void Say(string text, float seconds = 5) { message = text; messageUntil = Time.time + seconds; }
-    static void SetCursor(bool locked)
+    static void ShowCursor()
     {
-        Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
-        Cursor.visible = !locked;
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
     }
     void OnApplicationFocus(bool focus)
     {
-        if (!focus && player != null && !escaped) { paused = true; SetCursor(false); }
+        if (!focus && player != null && !escaped) { paused = true; ShowCursor(); }
     }
-    void OnDisable() { SetCursor(false); }
+    void OnDisable() { ShowCursor(); }
 
     void SubmitCode()
     {
@@ -193,7 +202,7 @@ static void StartGame()
             unlocked = true;
             keypadOpen = false;
             Say("Door unlocked. Walk through the doorway to escape!");
-            SetCursor(true);
+            ShowCursor();
         }
         else { code = ""; Say("Incorrect code. Try again."); }
     }
@@ -212,20 +221,18 @@ static void StartGame()
         player.enabled = false;
         player.transform.SetPositionAndRotation(spawn, Quaternion.identity);
         player.enabled = true;
-        pitch = verticalSpeed = 0;
-        eyes.transform.localRotation = Quaternion.identity;
+        verticalSpeed = 0;
         Say("Search the room. Something might be hidden under the rug.", 8);
-        SetCursor(true);
+        ShowCursor();
     }
 
     void OnGUI()
     {
-        GUI.Label(new Rect(18, 15, 600, 25), "ESCAPE ROOM   |   WASD: move   Mouse: look   E: interact   Esc: pause");
+        GUI.Label(new Rect(18, 15, 600, 25), "ESCAPE ROOM   |   WASD: move   Hover nearby objects and click or press E   Esc: pause");
         GUI.Label(new Rect(18, 42, 500, 25), hasKey ? "Inventory: brass key" : "Inventory: empty");
         if (Time.time < messageUntil) GUI.Box(new Rect(20, Screen.height - 85, Screen.width - 40, 55), message);
         if (!keypadOpen && !escaped && !paused)
         {
-            GUI.Label(new Rect(Screen.width / 2f - 5, Screen.height / 2f - 10, 20, 25), "+");
             if (!string.IsNullOrEmpty(prompt)) GUI.Box(new Rect(Screen.width / 2f - 180, Screen.height / 2f + 35, 360, 30), prompt);
         }
         if (keypadOpen)
@@ -250,7 +257,7 @@ static void StartGame()
             if (GUILayout.Button("0", GUILayout.Height(32)) && code.Length < 4) code += "0";
             if (GUILayout.Button("Enter", GUILayout.Height(32))) SubmitCode();
             GUILayout.EndHorizontal();
-            if (GUILayout.Button("Close (Esc)")) { keypadOpen = false; SetCursor(true); }
+            if (GUILayout.Button("Close (Esc)")) { keypadOpen = false; ShowCursor(); }
             GUILayout.EndArea();
             if (Event.current.type == EventType.KeyDown)
             {
@@ -266,7 +273,7 @@ static void StartGame()
             GUILayout.BeginArea(new Rect((Screen.width - 320) / 2f, (Screen.height - 180) / 2f, 320, 180), GUI.skin.box);
             GUILayout.Label(escaped ? "YOU ESCAPED!" : "PAUSED");
             if (escaped) GUILayout.Label("You unlocked the exit and left the room.");
-            else if (GUILayout.Button("Resume")) { paused = false; SetCursor(true); }
+            else if (GUILayout.Button("Resume")) { paused = false; ShowCursor(); }
             if (GUILayout.Button("Restart room")) Restart();
             GUILayout.EndArea();
         }
