@@ -40,11 +40,7 @@ public sealed class EscapeRoomGame : MonoBehaviour
         player.radius = .3f;
         player.center = new Vector3(0, .9f, 0);
         player.stepOffset = .25f;
-        var marker = Box("Player marker", Vector3.zero, new Vector3(.45f, .25f, .45f), Color.cyan);
-        marker.GetComponent<Collider>().enabled = false;
-        marker.layer = 2; // Ignore Raycast
-        marker.transform.SetParent(body.transform, false);
-        marker.transform.localPosition = Vector3.up * .3f;
+        LegoPlayerVisual.Attach(player, "Yaseen");
         body.layer = 2;
 
         eyes = new GameObject("Overhead Camera").AddComponent<Camera>();

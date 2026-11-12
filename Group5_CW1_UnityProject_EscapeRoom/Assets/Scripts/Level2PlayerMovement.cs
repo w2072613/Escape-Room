@@ -20,12 +20,7 @@ public class Level2PlayerMovement : MonoBehaviour
         playerCamera.orthographic = true;
         playerCamera.orthographicSize = Mathf.Max(7.5f, 5.5f / playerCamera.aspect);
 
-        var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        marker.name = "Player marker";
-        marker.GetComponent<Collider>().enabled = false;
-        marker.GetComponent<Renderer>().material.color = Color.cyan;
-        marker.transform.SetParent(transform, false);
-        marker.transform.localScale = new Vector3(.45f, .25f, .45f);
+        LegoPlayerVisual.Attach(controller, "Zain");
 
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
