@@ -14,4 +14,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/LegoTutorials.unity
     guid: 29b747535f2145379e21cb32f1ca2ba1
+  - enabled: 1
+    path: Assets/Scenes/Level4_Library.unity
+    guid: d6b468532c494bfeb9e1fd71e97cbfda
   m_configObjects: {}
